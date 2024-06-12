@@ -1,6 +1,7 @@
 import socket
 import json
 import logging as log
+from chiper import Chiper
 
 
 class Connection:
@@ -13,6 +14,9 @@ class Connection:
         self.__conn = None
 
         self.is_server = is_server
+
+        self.chiper = Chiper()
+        self.use_crypt = False
 
     def server(self):
         # 切换为服务端模式
@@ -27,6 +31,14 @@ class Connection:
             self.is_server = False
         else:
             raise RuntimeWarning("不能在已有连接的情况下更改状态")
+
+    def set_crypt(self, enable: bool, key=None):
+        # 设置加密状态
+        if enable:
+            self.use_crypt = True
+            self.chiper.set_pwd(key)
+        else:
+            self.use_crypt = False
 
     def listen(self, conns=5):
         # 服务端初始化
@@ -109,17 +121,21 @@ class Connection:
                 log.error("接收过程中断!")
                 return None
 
-        return msg
+        return msg if not self.use_crypt else self.chiper.decrypt(msg)
 
     def __formate_msg(self, msg: str | bytes):
         # 生成格式化消息
         # 数据包结构: 8字节长度 + json数据
+
+        if self.use_crypt:
+            msg = self.chiper.encrypt(msg if isinstance(msg, bytes) else msg.encode())
 
         return len(msg).to_bytes(8) + msg
 
 
 if __name__ == "__main__":
     server = Connection(ip="127.0.0.1")
+    server.set_crypt(True, "123456")
     server.listen(1)
     server.accept()
     server.send("hello")
